@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="AHF計算">
+  <title>AHF 角メントリ 計算アプリ</title>
+  <style>
+    :root {
+      --bg: #0f1923;
+      --card: #1a2535;
+      --primary: #3b82f6;
+      --accent: #10b981;
+      --warn: #f59e0b;
+      --danger: #ef4444;
+      --text: #f1f5f9;
+      --sub: #94a3b8;
+      --border: #2d3f55;
+      --r: 14px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding-bottom: 40px;
+    }
+    header {
+      background: linear-gradient(135deg,#1e3a5f,#0f2440);
+      padding: 20px 20px 16px;
+      text-align: center;
+      border-bottom: 1px solid var(--border);
+    }
+    header h1 { font-size: 18px; font-weight: 700; }
+    header p  { font-size: 12px; color: var(--sub); margin-top: 4px; }
+    .wrap { max-width: 560px; margin: 0 auto; padding: 16px; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 18px;
+      margin-bottom: 14px;
+    }
+    .card-title {
+      font-size: 12px; font-weight: 700; color: var(--primary);
+      letter-spacing: .8px; text-transform: uppercase;
+      margin-bottom: 14px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .card-title::before {
+      content:''; width:3px; height:14px;
+      background:var(--primary); border-radius:2px; display:block;
+    }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .field { display: flex; flex-direction: column; gap: 6px; }
+    .field label { font-size: 12px; color: var(--sub); font-weight: 600; }
+    .field-wrap { position: relative; display: flex; align-items: center; }
+    .field-wrap input {
+      width: 100%; background: var(--bg);
+      border: 1.5px solid var(--border); border-radius: 10px;
+      color: var(--text); font-size: 20px; font-weight: 700;
+      padding: 12px 40px 12px 14px; outline: none;
+      -webkit-appearance: none; appearance: none;
+    }
+    .field-wrap input:focus { border-color: var(--primary); }
+    .field-wrap .unit {
+      position: absolute; right: 12px;
+      font-size: 13px; color: var(--sub); font-weight: 600;
+      pointer-events: none;
+    }
+    #btn-calc {
+      width: 100%; background: var(--primary); color: #fff;
+      border: none; border-radius: 12px;
+      font-size: 18px; font-weight: 700; padding: 16px;
+      margin-top: 14px; cursor: pointer;
+    }
+    #btn-calc:active { background: #2563eb; }
+
+    /* ── 治具 ── */
+    .jig-box {
+      background: linear-gradient(135deg,#0d3b66,#1a2f50);
+      border: 1.5px solid #3b82f6; border-radius: 12px;
+      padding: 16px; text-align: center; margin-bottom: 14px;
+    }
+    .jig-label { font-size: 12px; color: var(--sub); margin-bottom: 4px; }
+    .jig-name  { font-size: 38px; font-weight: 800; color: #60a5fa; letter-spacing: 2px; }
+    .jig-size  { font-size: 12px; color: var(--sub); margin-top: 4px; }
+
+    /* ── テーブル ── */
+    table { width: 100%; border-collapse: collapse; }
+    table th {
+      font-size: 11px; color: var(--sub); text-align: left;
+      padding: 6px 8px; border-bottom: 1px solid var(--border);
+    }
+    table td { padding: 10px 8px; border-bottom: 1px solid var(--border); }
+    table tr:last-child td { border-bottom: none; }
+    .col-c   { color: var(--sub); font-size: 14px; font-weight: 600; width: 95px; }
+    .col-val { color: var(--text); font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .col-dif { color: var(--sub); font-size: 12px; text-align: right; }
+    .row-first .col-c, .row-first .col-val { color: var(--warn); }
+    .row-last  .col-c, .row-last  .col-val { color: var(--accent); }
+    .badge {
+      display: inline-block; font-size: 10px; font-weight: 700;
+      padding: 2px 6px; border-radius: 4px; margin-left: 5px; vertical-align: middle;
+    }
+    .b-s { background: rgba(245,158,11,.2); color: var(--warn); }
+    .b-e { background: rgba(16,185,129,.2); color: var(--accent); }
+
+    /* ── 計算過程 ── */
+    .toggle-btn {
+      width: 100%; background: none;
+      border: 1px solid var(--border); border-radius: 10px;
+      color: var(--sub); font-size: 13px; padding: 10px 14px;
+      text-align: left; cursor: pointer;
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 10px;
+    }
+    .toggle-btn.open { color: var(--text); border-color: var(--primary); }
+    .arrow { transition: transform .2s; }
+    .toggle-btn.open .arrow { transform: rotate(180deg); }
+    .detail-wrap { display: none; }
+    .detail-wrap.open { display: block; }
+    .drow {
+      display: flex; justify-content: space-between; align-items: flex-start;
+      padding: 8px 0; border-bottom: 1px solid var(--border); gap: 10px;
+    }
+    .drow:last-child { border-bottom: none; }
+    .dk { font-size: 12px; color: var(--sub); flex-shrink: 0; padding-top: 2px; }
+    .dv { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
+    .formula-box {
+      background: var(--bg); border-radius: 8px;
+      padding: 10px 12px; font-size: 12px; color: #60a5fa;
+      font-family: 'Courier New', monospace;
+      margin-top: 6px; line-height: 1.7; white-space: pre-wrap; word-break: break-all;
+    }
+
+    /* ── エラー ── */
+    .err {
+      background: rgba(239,68,68,.1); border: 1px solid var(--danger);
+      border-radius: 10px; padding: 14px;
+      color: #fca5a5; font-size: 14px; line-height: 1.6;
+      margin-bottom: 14px; white-space: pre-wrap;
+    }
+
+    /* ── QR ── */
+    .qr-wrap { text-align: center; }
+    .qr-wrap img { margin: 12px auto; display: block; border-radius: 8px; }
+    .qr-note { font-size: 11px; color: var(--sub); line-height: 1.7; }
+    .qr-url {
+      font-size: 10px; color: var(--primary); word-break: break-all;
+      margin-top: 6px; padding: 6px 10px;
+      background: var(--bg); border-radius: 6px;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>AHF 角メントリ 計算アプリ</h1>
+  <p>治具選別 ＋ インプット値 自動計算</p>
+</header>
+
+<div class="wrap">
+
+  <!-- 入力 -->
+  <div class="card">
+    <div class="card-title">数値を入力</div>
+    <div class="grid2">
+      <div class="field">
+        <label>W（幅）</label>
+        <div class="field-wrap">
+          <input type="number" id="w" inputmode="decimal" placeholder="0" step="0.1">
+          <span class="unit">mm</span>
+        </div>
+      </div>
+      <div class="field">
+        <label>L（長さ）</label>
+        <div class="field-wrap">
+          <input type="number" id="l" inputmode="decimal" placeholder="0" step="0.1">
+          <span class="unit">mm</span>
+        </div>
+      </div>
+      <div class="field">
+        <label>現在の面取り数値</label>
+        <div class="field-wrap">
+          <input type="number" id="cur" inputmode="decimal" placeholder="0" step="0.1" min="0">
+          <span class="unit">C</span>
+        </div>
+      </div>
+      <div class="field">
+        <label>最終面取り数値</label>
+        <div class="field-wrap">
+          <input type="number" id="fin" inputmode="decimal" placeholder="0" step="0.1" min="0">
+          <span class="unit">C</span>
+        </div>
+      </div>
+    </div>
+    <button id="btn-calc">計　算</button>
+  </div>
+
+  <!-- 結果エリア（JSで挿入） -->
+  <div id="out"></div>
+
+  <!-- QR -->
+  <div class="card">
+    <div class="card-title">このアプリを共有</div>
+    <div class="qr-wrap" id="qr-area"></div>
+  </div>
+
+</div>
+
+<script>
+/* ===== データ定義 ===== */
+var TABLE = {
+  20: {5:19.2, 6:20.2, 7:21.2, 8:22.2, 9:23.2, 10:24.1},
+  30: {5:26.2, 6:27.2, 7:28.2, 8:29.2, 9:30.2, 10:31.1, 15:36.1, 20:41.0},
+  50: {5:40.4, 6:41.4, 7:42.4, 8:43.4, 9:44.4, 10:45.3, 15:50.3, 20:55.2, 25:60.2, 30:65.1},
+  70: {5:54.5, 6:55.5, 7:56.5, 8:57.5, 9:58.5, 10:59.4, 15:64.4, 20:69.3, 25:74.3, 30:79.2}
+};
+var CONST = {20:49.5, 30:42.5, 50:28.3, 70:14.2};
+var JNAME = {20:'E / F', 30:'G / H', 50:'A / B', 70:'C / D'};
+var JSIZE = {20:'開口部 20mm', 30:'開口部 30mm', 50:'開口部 50mm', 70:'開口部 70mm'};
+var TC_LIST = [5,6,7,8,9,10,15,20,25,30];
+
+/* 切り捨て（小数第3位以下） */
+function t2(n) { return Math.floor(n * 100) / 100; }
+
+/* finalCに対する早見表の参照C（切り上げ） */
+function nextTC(c) {
+  for (var i=0; i<TC_LIST.length; i++) {
+    if (TC_LIST[i] >= c) return TC_LIST[i];
+  }
+  return null;
+}
+
+/* 治具選定 */
+function selectJig(sumWL, finalC) {
+  var tc = nextTC(finalC);
+  if (tc === null) return null;
+  var bestJig = null, bestVal = -1;
+  var sizes = [20,30,50,70];
+  for (var i=0; i<sizes.length; i++) {
+    var sz = sizes[i];
+    var row = TABLE[sz];
+    if (row[tc] === undefined) continue;
+    var v = row[tc];
+    if (v <= sumWL && v > bestVal) {
+      bestVal = v;
+      bestJig = sz;
+    }
+  }
+  return bestJig;
+}
+
+/* ステップ生成 */
+function makeSteps(initVal, curC, finC) {
+  var steps = [];
+  steps.push({C: curC, val: t2(initVal), diff: null});
+  var C = curC;
+  var cum = 0;
+  while (C < finC) {
+    var nC = Math.round(Math.min(C + 1.0, finC) * 10) / 10;
+    if (nC <= C) break;
+    var dc = Math.round((nC - C) * 10) / 10;
+    cum = Math.round((cum + dc) * 10) / 10;
+    C = nC;
+    steps.push({C: C, val: t2(initVal - cum * 0.7), diff: dc});
+  }
+  return steps;
+}
+
+/* ===== メイン計算 ===== */
+function calc() {
+  var W   = parseFloat(document.getElementById('w').value);
+  var L   = parseFloat(document.getElementById('l').value);
+  var cur = parseFloat(document.getElementById('cur').value);
+  var fin = parseFloat(document.getElementById('fin').value);
+
+  // 検証
+  if (isNaN(W) || isNaN(L) || isNaN(cur) || isNaN(fin)) {
+    return showErr('すべての数値を入力してください。');
+  }
+  if (W <= 0 || L <= 0) {
+    return showErr('W・L は 0 より大きい値を入力してください。');
+  }
+  if (cur < 0) {
+    return showErr('現在の面取り数値は 0 以上を入力してください。');
+  }
+  if (fin <= 0) {
+    return showErr('最終面取り数値は 0 より大きい値を入力してください。');
+  }
+  if (fin < cur) {
+    return showErr('最終面取り数値が現在の面取り数値より小さいです。\n値をご確認ください。');
+  }
+
+  var sumWL = W + L;
+  var jig   = selectJig(sumWL, fin);
+  var tc    = nextTC(fin);
+
+  if (jig === null) {
+    if (tc === null) {
+      return showErr('最終面取り数値 ' + fin + 'C は早見表の範囲外です（最大30Cまで対応）。');
+    }
+    return showErr('W+L = ' + sumWL + 'mm、面取り ' + fin + 'C（表引き ' + tc + 'C）に対応できる治具が見つかりません。\nW・L の値をご確認ください。');
+  }
+
+  var constant = CONST[jig];
+  var emRaw    = (constant + W + L) / 1.414;
+  var em       = t2(emRaw);
+  var initVal  = t2(em - cur * 0.7);
+  var steps    = makeSteps(initVal, cur, fin);
+
+  renderResult({
+    jig: jig, tc: tc, sumWL: sumWL,
+    constant: constant, emRaw: emRaw, em: em,
+    initVal: initVal, steps: steps,
+    W: W, L: L, cur: cur, fin: fin
+  });
+}
+
+/* ===== 描画 ===== */
+function showErr(msg) {
+  document.getElementById('out').innerHTML =
+    '<div class="err">' + msg.replace(/\n/g,'<br>') + '</div>';
+}
+
+function renderResult(r) {
+  // ── ステップ行 ──
+  var rows = '';
+  for (var i=0; i<r.steps.length; i++) {
+    var s = r.steps[i];
+    var isFirst = (i === 0);
+    var isLast  = (i === r.steps.length - 1);
+    var cls = isFirst ? 'row-first' : (isLast ? 'row-last' : '');
+    var badge = isFirst
+      ? '<span class="badge b-s">初回</span>'
+      : (isLast ? '<span class="badge b-e">最終</span>' : '');
+    var diffTxt = (s.diff !== null)
+      ? '−' + s.diff + 'C<br><small style="opacity:.7">' + t2(s.diff * 0.7).toFixed(2) + 'mm</small>'
+      : '—';
+    rows += '<tr class="' + cls + '">'
+      + '<td class="col-c">' + s.C + 'C' + badge + '</td>'
+      + '<td class="col-val">' + s.val.toFixed(2) + '</td>'
+      + '<td class="col-dif">' + diffTxt + '</td>'
+      + '</tr>';
+  }
+
+  // ── 計算過程テキスト ──
+  var fml = '( ' + r.constant + ' + ' + r.W + ' + ' + r.L + ' ) ÷ 1.414\n'
+    + '= ' + (r.constant + r.W + r.L).toFixed(4) + ' ÷ 1.414\n'
+    + '= ' + r.emRaw.toFixed(6) + '\n'
+    + '→ 切り捨て: ' + r.em.toFixed(2) + '（対象角 EM の高さ）';
+
+  var sub = r.em.toFixed(2) + ' − ' + r.cur + ' × 0.7\n'
+    + '= ' + r.em.toFixed(2) + ' − ' + t2(r.cur * 0.7).toFixed(2) + '\n'
+    + '= ' + r.initVal.toFixed(2) + '（初回インプット）';
+
+  // ── HTML 組み立て ──
+  var html = ''
+    // 治具カード
+    + '<div class="card">'
+    +   '<div class="card-title">選定治具</div>'
+    +   '<div class="jig-box">'
+    +     '<div class="jig-label">使用する治具</div>'
+    +     '<div class="jig-name">' + JNAME[r.jig] + '</div>'
+    +     '<div class="jig-size">' + JSIZE[r.jig] + '</div>'
+    +   '</div>'
+    +   '<div class="card-title">インプット一覧</div>'
+    +   '<table>'
+    +     '<thead><tr>'
+    +       '<th>面取り数値</th><th>インプット値</th><th style="text-align:right">削り込み</th>'
+    +     '</tr></thead>'
+    +     '<tbody>' + rows + '</tbody>'
+    +   '</table>'
+    + '</div>'
+    // 計算過程カード
+    + '<div class="card">'
+    +   '<div class="card-title">計算過程</div>'
+    +   '<button class="toggle-btn" onclick="toggleDetail(this)">'
+    +     '<span>計算の詳細を表示</span><span class="arrow">▼</span>'
+    +   '</button>'
+    +   '<div class="detail-wrap">'
+    +     '<div class="drow"><span class="dk">W + L</span><span class="dv">' + r.W + ' + ' + r.L + ' = <b>' + r.sumWL + '</b> mm</span></div>'
+    +     '<div class="drow"><span class="dk">早見表 参照C</span><span class="dv">' + r.tc + 'C（' + r.fin + 'C を切り上げ）</span></div>'
+    +     '<div class="drow"><span class="dk">選定治具</span><span class="dv">' + JNAME[r.jig] + '（' + JSIZE[r.jig] + '）</span></div>'
+    +     '<div class="drow"><span class="dk">計算式定数</span><span class="dv">' + r.constant + '</span></div>'
+    +     '<div class="drow"><span class="dk">EM 高さ計算</span><span class="dv" style="text-align:left;width:100%"><div class="formula-box">' + fml.replace(/\n/g,'<br>') + '</div></span></div>'
+    +     '<div class="drow"><span class="dk">現在C を差し引き</span><span class="dv" style="text-align:left;width:100%"><div class="formula-box">' + sub.replace(/\n/g,'<br>') + '</div></span></div>'
+    +     '<div class="drow"><span class="dk">1C の削り込み</span><span class="dv">0.7 mm</span></div>'
+    +   '</div>'
+    + '</div>';
+
+  document.getElementById('out').innerHTML = html;
+
+  // スクロール
+  setTimeout(function() {
+    document.getElementById('out').scrollIntoView({behavior:'smooth', block:'start'});
+  }, 80);
+}
+
+function toggleDetail(btn) {
+  btn.classList.toggle('open');
+  var wrap = btn.nextElementSibling;
+  wrap.classList.toggle('open');
+  btn.querySelector('span').textContent =
+    btn.classList.contains('open') ? '計算の詳細を隠す' : '計算の詳細を表示';
+}
+
+/* ===== ボタン登録 ===== */
+document.getElementById('btn-calc').addEventListener('click', function() {
+  try { calc(); }
+  catch(e) { showErr('エラーが発生しました: ' + e.message); }
+});
+
+/* ===== QR コード ===== */
+(function() {
+  var url = window.location.href;
+  var el  = document.getElementById('qr-area');
+  if (url.indexOf('file://') === 0) {
+    el.innerHTML = '<div style="padding:16px 0; font-size:12px; color:var(--sub); line-height:1.8">'
+      + '📂 現在はファイルとして開いています。<br>'
+      + 'QRコードで共有するには、このHTMLファイルを<br>'
+      + 'GitHub Pages などに公開してください。<br><br>'
+      + '<span style="color:var(--text)">📱 LINEで共有する場合は「ファイル送信」で<br>'
+      + 'このHTMLファイルを送ってください。</span>'
+      + '</div>';
+  } else {
+    var src = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + encodeURIComponent(url);
+    el.innerHTML = '<img src="' + src + '" width="160" height="160" alt="QRコード" style="border-radius:8px;margin:10px auto;display:block">'
+      + '<p class="qr-note">このQRコードをスキャンするとアプリにアクセスできます</p>'
+      + '<div class="qr-url">' + url + '</div>';
+  }
+})();
+</script>
+</body>
+</html>
