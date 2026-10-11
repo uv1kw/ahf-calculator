@@ -87,6 +87,12 @@
     .jig-label { font-size: 12px; color: var(--sub); margin-bottom: 4px; }
     .jig-name  { font-size: 38px; font-weight: 800; color: #60a5fa; letter-spacing: 2px; }
     .jig-size  { font-size: 12px; color: var(--sub); margin-top: 4px; }
+    .jig-drop  {
+      display: inline-block; margin-top: 10px;
+      background: rgba(245,158,11,.18); color: var(--warn);
+      border: 1px solid rgba(245,158,11,.45); border-radius: 6px;
+      font-size: 11px; font-weight: 700; padding: 4px 10px; line-height: 1.5;
+    }
 
     /* ── テーブル ── */
     table { width: 100%; border-collapse: collapse; }
@@ -235,23 +241,54 @@ function nextTC(c) {
   return null;
 }
 
-/* 治具選定 */
+/* 小数第1位へ丸める（20.2 + 20.2 = 40.400000000000006 対策） */
+function r1(n) { return Math.round(n * 10) / 10; }
+
+/* 治具選定
+   管理表の値は「その治具を使える最小の W+L」。
+   W+L が表の値とピッタリ一致した場合は境界ちょうどで余裕がないため、
+   管理表の1つ下の値（＝1つ小さい治具）を採用する。 */
 function selectJig(sumWL, finalC) {
   var tc = nextTC(finalC);
   if (tc === null) return null;
-  var bestJig = null, bestVal = -1;
+
+  var key = r1(sumWL);
+
+  /* この参照C列で使える治具を、表の値が小さい順に並べる */
   var sizes = [20,30,50,70];
+  var cands = [];
   for (var i=0; i<sizes.length; i++) {
-    var sz = sizes[i];
-    var row = TABLE[sz];
-    if (row[tc] === undefined) continue;
-    var v = row[tc];
-    if (v <= sumWL && v > bestVal) {
-      bestVal = v;
-      bestJig = sz;
-    }
+    var v = TABLE[sizes[i]][tc];
+    if (v === undefined) continue;
+    cands.push({jig: sizes[i], val: v});
   }
-  return bestJig;
+  cands.sort(function(a, b) { return a.val - b.val; });
+
+  /* ピッタリ一致する行を探す */
+  var hit = -1;
+  for (var j=0; j<cands.length; j++) {
+    if (r1(cands[j].val) === key) { hit = j; break; }
+  }
+
+  if (hit === 0) {
+    /* 最小値と一致。落とす先がない */
+    return {jig: null, reason: 'noLower', matchedVal: cands[0].val, matchedJig: cands[0].jig};
+  }
+  if (hit > 0) {
+    var lower = cands[hit - 1];
+    return {
+      jig: lower.jig, usedVal: lower.val, exactMatch: true,
+      matchedVal: cands[hit].val, matchedJig: cands[hit].jig
+    };
+  }
+
+  /* 通常：表の値が W+L 未満で最大のもの */
+  var best = null;
+  for (var k=0; k<cands.length; k++) {
+    if (cands[k].val < key) best = cands[k];
+  }
+  if (best === null) return {jig: null, reason: 'tooSmall'};
+  return {jig: best.jig, usedVal: best.val, exactMatch: false};
 }
 
 /* ステップ生成 */
@@ -295,17 +332,23 @@ function calc() {
     return showErr('最終面取り数値が現在の面取り数値より小さいです。\n値をご確認ください。');
   }
 
-  var sumWL = W + L;
-  var jig   = selectJig(sumWL, fin);
+  var sumWL = r1(W + L);
+  var sel   = selectJig(sumWL, fin);
   var tc    = nextTC(fin);
 
-  if (jig === null) {
-    if (tc === null) {
-      return showErr('最終面取り数値 ' + fin + 'C は早見表の範囲外です（最大30Cまで対応）。');
+  if (sel === null) {
+    return showErr('最終面取り数値 ' + fin + 'C は早見表の範囲外です（最大30Cまで対応）。');
+  }
+  if (sel.jig === null) {
+    if (sel.reason === 'noLower') {
+      return showErr('W+L = ' + sumWL + 'mm は治具 ' + JNAME[sel.matchedJig]
+        + '（' + JSIZE[sel.matchedJig] + '）の管理表の値とちょうど一致しています。\n'
+        + '1つ下の治具がないため計算できません。\nW・L の値をご確認ください。');
     }
     return showErr('W+L = ' + sumWL + 'mm、面取り ' + fin + 'C（表引き ' + tc + 'C）に対応できる治具が見つかりません。\nW・L の値をご確認ください。');
   }
 
+  var jig      = sel.jig;
   var constant = CONST[jig];
   var emRaw    = (constant + W + L) / 1.414;
   var em       = t2(emRaw);
@@ -313,7 +356,7 @@ function calc() {
   var steps    = makeSteps(initVal, cur, fin);
 
   renderResult({
-    jig: jig, tc: tc, sumWL: sumWL,
+    jig: jig, tc: tc, sumWL: sumWL, sel: sel,
     constant: constant, emRaw: emRaw, em: em,
     initVal: initVal, steps: steps,
     W: W, L: L, cur: cur, fin: fin
@@ -357,6 +400,18 @@ function renderResult(r) {
     + '= ' + r.em.toFixed(2) + ' − ' + t2(r.cur * 0.7).toFixed(2) + '\n'
     + '= ' + r.initVal.toFixed(2) + '（初回インプット）';
 
+  // ── 1段下げの注記 ──
+  var dropped = (r.sel && r.sel.exactMatch);
+  var dropNote = dropped
+    ? '<div class="jig-drop">管理表の値とちょうど一致のため 1段下げ</div>'
+    : '';
+  var dropRow = dropped
+    ? '<div class="drow"><span class="dk">治具の1段下げ</span><span class="dv">'
+      + 'W+L = ' + r.sumWL + ' は ' + JNAME[r.sel.matchedJig] + '（' + r.sel.matchedVal + '）と一致<br>'
+      + '→ 1つ下の ' + JNAME[r.jig] + '（' + r.sel.usedVal + '）で計算'
+      + '</span></div>'
+    : '';
+
   // ── HTML 組み立て ──
   var html = ''
     // 治具カード
@@ -366,6 +421,7 @@ function renderResult(r) {
     +     '<div class="jig-label">使用する治具</div>'
     +     '<div class="jig-name">' + JNAME[r.jig] + '</div>'
     +     '<div class="jig-size">' + JSIZE[r.jig] + '</div>'
+    +     dropNote
     +   '</div>'
     +   '<div class="card-title">インプット一覧</div>'
     +   '<table>'
@@ -384,6 +440,7 @@ function renderResult(r) {
     +   '<div class="detail-wrap">'
     +     '<div class="drow"><span class="dk">W + L</span><span class="dv">' + r.W + ' + ' + r.L + ' = <b>' + r.sumWL + '</b> mm</span></div>'
     +     '<div class="drow"><span class="dk">早見表 参照C</span><span class="dv">' + r.tc + 'C（' + r.fin + 'C を切り上げ）</span></div>'
+    +     dropRow
     +     '<div class="drow"><span class="dk">選定治具</span><span class="dv">' + JNAME[r.jig] + '（' + JSIZE[r.jig] + '）</span></div>'
     +     '<div class="drow"><span class="dk">計算式定数</span><span class="dv">' + r.constant + '</span></div>'
     +     '<div class="drow"><span class="dk">EM 高さ計算</span><span class="dv" style="text-align:left;width:100%"><div class="formula-box">' + fml.replace(/\n/g,'<br>') + '</div></span></div>'
